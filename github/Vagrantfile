@@ -1,0 +1,75 @@
+Vagrant.configure("2")  do |config|
+    number_of_node = ENV["NODES"] || 2
+    branch = ENV["BRANCH"] || "v4.2.0"
+    pr_id = ""
+  
+    config.vm.define :server do |server|
+      server.vm.box = "rockylinux/8"
+      server.vm.box_version = "4.0.0"
+      server.vm.hostname = "warewulf-server"
+  
+      server.vm.network "private_network",
+        ip: "10.0.0.254",
+        netmask: "255.255.252.0",
+        libvirt__network_name: "pxe",
+        libvirt__dhcp_enabled: false
+  
+      server.vm.provider :libvirt do |libvirt|
+        libvirt.cpu_mode = "host-passthrough"
+        libvirt.memory = '4192'
+        libvirt.cpus = '2'
+        libvirt.machine_virtual_size = 40
+      end
+  
+      server.vm.provision "shell", inline: <<-SHELL
+        dnf install -y cloud-utils-growpart
+        growpart /dev/vda 1
+        xfs_growfs /dev/vda1
+      SHELL
+  
+      server.vm.provision "shell", inline: <<-SHELL
+        dnf install -y vim tree mlocate curl wget git
+        dnf install -y dhcp-server tftp-server nfs-utils
+        dnf install -y https://repo.ctrliq.com/rhel/8/ciq-release.rpm
+        # dnf install -y warewulf
+        dnf install -y epel-release
+        dnf install -y bind-utils
+        dnf install -y make golang
+        dnf groupinstall -y "Development Tools"
+        dnf install -y libseccomp-devel squashfs-tools cryptsetup
+        dnf install -y apptainer
+        wegt https://github.com/cli/cli/releases/download/v2.6.0/gh_2.6.0_linux_amd64.rpm
+        dnf install -y gh_2.6.0_linux_amd64.rpm
+        rm -f gh_2.6.0_linux_amd64.rpm
+        git clone https://github.com/hpcng/warewulf.git
+        # gh pr checkout #{pr_id}
+        # git checkout tags/v4.2.0 -b v4.2.0
+        chmod -R vagrant:vagrant warewulf
+        #cd warewulf
+        #make all
+        #make install
+      SHELL
+    
+  
+    end
+  
+  
+    (1..number_of_node).each do |i|
+      config.vm.define :"n000#{i}", autostart: false do |node|
+        node.vm.hostname = "n000#{i}"
+  
+        node.vm.network "private_network",
+          libvirt__network_name: "pxe"
+  
+        node.vm.provider :libvirt do |compute|
+          compute.cpu_mode = 'host-passthrough'
+          compute.memory = '4192'
+          compute.cpus = '1'
+  
+          boot_network = {'network' => 'pxe'}
+          compute.boot boot_network
+        end
+      end
+    end
+  end
+  
