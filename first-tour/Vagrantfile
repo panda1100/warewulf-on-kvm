@@ -5,7 +5,7 @@ Vagrant.configure("2")  do |config|
 
   config.vm.define :server do |server|
     server.vm.box = "rockylinux/8"
-    server.vm.box_version = "4.0.0"
+    server.vm.box_version = "5.0.0"
     server.vm.hostname = "warewulf-server"
 
     server.vm.network "private_network",
